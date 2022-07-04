@@ -1,0 +1,138 @@
+########video 1 on Data Collection On TSLA
+!pip install yfinance
+!pip install matplotlib
+import pandas as pd
+import numpy as np
+import yfinance as yf
+import datetime
+import time
+import requests
+import io
+%matplotlib inline
+import matplotlib.pyplot as plt
+from matplotlib.pylab import rcParams
+import seaborn as sns
+import tensorflow
+from pandas_datareader.data import DataReader
+ticker = "TSLA"
+start_date= datetime.datetime(2015,1,1)
+end_date= datetime.datetime(2022,7,3)
+stock_df= pd.DataFrame()
+stock= []
+stock= yf.download(ticker,start=start_date,end=end_date,progress=False)
+stock_df= stock_df.append(stock,sort=False)
+stock_df['Symbol']= ticker
+stock_df
+plt.figure(figsize=(13,4))### 13=LENGTH, 4=WIDTH of the grapg plotted
+plt.plot(stock_df["Close"],label="TSLA Closing Price History")###plotting closing prices
+plt.title('Closing Price History')
+plt.xlabel('Date',fontsize=13)
+plt.ylabel('Close Price USD ($)', fontsize=13)
+#######video 2 on adding Moving Averages
+sns.set_style('whitegrid')
+plt.style.use("fivethirtyeight")
+from datetime import datetime
+ma_day=[10,30,60]
+
+for ma in ma_day:
+  column_name= f"MA for {ma} days"
+  stock_df2=stock_df
+  stock_df2[column_name]= stock_df2['Adj Close'].rolling(ma).mean()
+stock_df2
+plt.figure(figsize=(13,4))
+plt.plot(stock_df["Close"],label='Closing Price')
+plt.plot(stock_df["MA for 10 days"],label='10 Day Moving Average')
+plt.plot(stock_df["MA for 30 days"],label='30 Day Moving Average')
+plt.plot(stock_df["MA for 60 days"],label='60 Day Moving Average')
+plt.title("Stock Closing Price and Moving Average")
+plt.xlabel('Time')
+plt.ylabel('Price')
+plt.legend()
+plt.show()
+stock_df['Daily Return']= stock_df['Adj Close'].pct_change()
+sns.displot(stock_df["Daily Return"].dropna(),bins=100,color='goldenrod',height=3,aspect=23/6)
+plt.title("Daily Return")
+plt.show()
+######Video 4 on forecasting 
+####taining and testing sets
+data=stock_df.filter(['Close'])
+####convert data into a numpy array
+dataset=data.values
+####getting no of rows for training set
+training_data_len= int(np.ceil(len(dataset)*.95))
+training_data_len
+####scale the data
+from sklearn.preprocessing import MinMaxScaler
+scaler= MinMaxScaler(feature_range=(0,1))
+scaled_data= scaler.fit_transform(dataset)
+scaled_data
+##create training dataset
+##create scaled training dataset
+train_data= scaled_data[0:int(training_data_len), :]
+###split data into x_train and y_train
+x_train= []
+y_train= []
+
+for i in range(60, len(train_data)):
+  x_train.append(train_data[i-60:i, 0])
+  y_train.append(train_data[i, 0])
+  if i<= 61:
+    print(x_train)
+    print(y_train)
+    print()
+###convert X_train and y_train into numpy arrays
+x_train, y_train= np.array(x_train),np.array(y_train)
+###reshape the data
+x_train= np.reshape(x_train, (x_train.shape[0],x_train.shape[1],1))    
+
+from keras.models import Sequential
+from keras.layers import Dense, LSTM
+####building LSTM model
+model=Sequential()
+model.add(LSTM(128, return_sequences=True, input_shape=(x_train.shape[1], 1)))
+model.add(LSTM(64, return_sequences=False))
+model.add(Dense(25))
+model.add(Dense(1))
+
+#####compile the model
+model.compile(optimizer='adam',loss='mean_squared_error')
+
+####train the model
+model.fit(x_train,y_train, batch_size=1, epochs=1)
+####create testing data set
+##create a new array containing scaled values 
+test_data=scaled_data[training_data_len - 60: , :]
+###create data sets x_test and y_test
+x_test= []
+y_test= dataset[training_data_len:, :]
+for i in range(60, len(test_data)):
+  x_test.append(test_data[i-60:i, 0])
+
+###convert the data into a numpy array
+x_test= np.array(x_test)
+###reshape the data
+x_test= np.reshape(x_test,(x_test.shape[0],x_test.shape[1], 1))
+###get the model predicted price values
+predictions= model.predict(x_test)
+predictions= scaler.inverse_transform(predictions)
+##get the root mean squared error RMSE
+rmse=np.sqrt(np.mean(((predictions- y_test)**2)))
+rmse
+##get the mean absolute percentage error MAPE
+mape=np.mean(np.abs((y_test- predictions )/y_test))*100
+mape
+###remove pandas warning on copy of a slice which is immaterial in this case
+ pd.options.mode.chained_assignment= None ##default='warn'
+ ##plot the data
+ train= data[:training_data_len]
+valid= data[training_data_len:]
+valid['Predictions']= predictions
+####visualize the data
+plt.figure(figsize=(13,5))
+plt.plot(train['Close'])
+plt.plot(valid[['Close','Predictions']])
+plt.title("Stock Price Forecast Using LSTM Model")
+plt.xlabel('Date', fontsize=13)
+plt.ylabel('Close Price USD ($)',fontsize=13)
+plt.legend(['Train', 'Val', 'Predictions'], loc='upper left')
+plt.show()
